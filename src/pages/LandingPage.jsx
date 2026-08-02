@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import Navbar from '../components/Navbar/Navbar';
 import Hero from '../components/Hero/Hero';
 import TrustedBy from '../components/TrustedBy/TrustedBy';
 import Features from '../components/Features/Features';
@@ -10,7 +9,6 @@ import Comparison from '../components/Comparison/Comparison';
 import Testimonials from '../components/Testimonials/Testimonials';
 import FAQ from '../components/FAQ/FAQ';
 import CTA from '../components/CTA/CTA';
-import Footer from '../components/Footer/Footer';
 
 export default function LandingPage() {
   const containerRef = useRef(null);
@@ -35,6 +33,17 @@ export default function LandingPage() {
 
     revealEls.forEach((el) => io.observe(el));
 
+    // Handle hash scroll on mount
+    if (window.location.hash) {
+      const targetId = window.location.hash.substring(1);
+      const el = document.getElementById(targetId);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    }
+
     return () => {
       revealEls.forEach((el) => io.unobserve(el));
       io.disconnect();
@@ -43,7 +52,6 @@ export default function LandingPage() {
 
   return (
     <div ref={containerRef}>
-      <Navbar />
       <Hero />
       <TrustedBy />
       <Features />
@@ -54,7 +62,6 @@ export default function LandingPage() {
       <Testimonials />
       <FAQ />
       <CTA />
-      <Footer />
     </div>
   );
 }

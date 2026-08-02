@@ -1,20 +1,24 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function Footer() {
+  const location = useLocation();
+  const isHome = location.pathname === '/';
+
   return (
     <footer>
       <div className="wrap">
         <div className="foot-grid">
           <div className="foot-brand">
-            <a href="#" className="logo" style={{ color: '#fff' }}>
+            <Link to="/" className="logo" style={{ color: '#fff' }}>
               <span className="logo-mark">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 6h16M4 12h16M4 18h10" />
                   <circle cx="19" cy="18" r="2.4" />
                 </svg>
               </span>
               MetroAI
-            </a>
+            </Link>
             <p>AI-powered legal metrology compliance, built for inspectors, retailers, and manufacturers.</p>
             <div className="social">
               <a href="#" aria-label="Twitter">
@@ -37,19 +41,25 @@ export default function Footer() {
           <div className="foot-col">
             <h5>Product</h5>
             <ul>
-              <li><a href="#features">Features</a></li>
-              <li><a href="#how">How It Works</a></li>
-              <li><a href="#preview">Live Preview</a></li>
+              <li>
+                {isHome ? <a href="#features">Features</a> : <Link to="/#features">Features</Link>}
+              </li>
+              <li>
+                {isHome ? <a href="#how">How It Works</a> : <Link to="/#how">How It Works</Link>}
+              </li>
+              <li>
+                {isHome ? <a href="#preview">Live Preview</a> : <Link to="/#preview">Live Preview</Link>}
+              </li>
               <li><a href="#">Pricing</a></li>
             </ul>
           </div>
           <div className="foot-col">
             <h5>Company</h5>
             <ul>
-              <li><a href="#about">About</a></li>
+              <li><Link to="/about">About</Link></li>
               <li><a href="#">Careers</a></li>
               <li><a href="#">Press</a></li>
-              <li><a href="#contact">Contact</a></li>
+              <li><Link to="/contact">Contact</Link></li>
             </ul>
           </div>
           <div className="foot-col">
