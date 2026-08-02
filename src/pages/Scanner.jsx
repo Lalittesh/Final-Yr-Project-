@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageTransition from '../components/PageTransition/PageTransition';
 import { cameraService } from '../services/camera/cameraService';
+import { detectionService } from '../services/productDetection/detectionService';
+import BoundingBoxOverlay from '../components/BoundingBoxOverlay/BoundingBoxOverlay';
 
 export default function Scanner() {
   // Webcam & Capture States
@@ -13,8 +15,14 @@ export default function Scanner() {
   const [flashActive, setFlashActive] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
 
-  // Simulation & Pipeline States
-  const [isSimulating, setIsSimulating] = useState(false);
+  // Pipeline States
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [pipelineError, setPipelineError] = useState(null);
+  const [pipelineWarning, setPipelineWarning] = useState(null);
+  const [detectedProduct, setDetectedProduct] = useState(null);
+  const [detectionConfidence, setDetectionConfidence] = useState(0);
+  const [inferenceTime, setInferenceTime] = useState(0);
+  const [boundingBoxes, setBoundingBoxes] = useState([]);
   const [simStep, setSimStep] = useState(0);
 
   const videoRef = useRef(null);
@@ -44,28 +52,15 @@ export default function Scanner() {
     };
   }, [stream]);
 
-  // Simulated scan state transitions
-  useEffect(() => {
-    let timer;
-    if (isSimulating) {
-      setSimStep(1); // 1: Detecting Object
-      timer = setTimeout(() => {
-        setSimStep(2); // 2: OCR Scanning
-        timer = setTimeout(() => {
-          setSimStep(3); // 3: AI Compliance Checks
-          timer = setTimeout(() => {
-            setSimStep(4); // 4: Done
-          }, 1200);
-        }, 1200);
-      }, 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [isSimulating]);
-
   // Start Camera Feed handler
   const startCameraFeed = async () => {
     setCameraError(null);
     setCapturedImage(null);
+    setPipelineError(null);
+    setPipelineWarning(null);
+    setDetectedProduct(null);
+    setBoundingBoxes([]);
+    setSimStep(0);
     try {
       const activeStream = await cameraService.getStream(facingMode);
       setStream(activeStream);
@@ -134,44 +129,81 @@ export default function Scanner() {
   // Delete captured frame & restart webcam
   const deleteCapturedFrame = () => {
     setCapturedImage(null);
+    setPipelineError(null);
+    setPipelineWarning(null);
+    setDetectedProduct(null);
+    setBoundingBoxes([]);
+    setSimStep(0);
     startCameraFeed();
   };
 
-  // Start mock analysis on captured frame
-  const useCapturedFrame = () => {
+  // Run Real Hugging Face analysis pipeline on captured frame
+  const useCapturedFrame = async () => {
     if (!capturedImage) return;
-    setIsSimulating(true);
+    
+    setIsAnalyzing(true);
+    setPipelineError(null);
+    setPipelineWarning(null);
+    setDetectedProduct(null);
+    setBoundingBoxes([]);
+    setSimStep(1); // Object detection processing
+
+    try {
+      const result = await detectionService.runPipeline(capturedImage);
+      setIsAnalyzing(false);
+
+      if (result.status === 'ERROR') {
+        setPipelineError(result.error.message);
+        setSimStep(-1); // Error code
+      } else {
+        setDetectedProduct(result.detectedProduct);
+        setDetectionConfidence(result.confidence);
+        setInferenceTime(result.inferenceTime);
+        setBoundingBoxes(result.boundingBoxes);
+        setPipelineWarning(result.warning);
+        setSimStep(2); // Completed
+      }
+    } catch (err) {
+      setIsAnalyzing(false);
+      setPipelineError('Detection pipeline crashed during inference.');
+      setSimStep(-1);
+    }
   };
 
   const resetAllStates = () => {
-    setIsSimulating(false);
     setSimStep(0);
     setCapturedImage(null);
+    setDetectedProduct(null);
+    setBoundingBoxes([]);
+    setPipelineError(null);
+    setPipelineWarning(null);
     stopCameraFeed();
   };
 
   const workflowSteps = [
     { label: 'Camera Feed', status: stream ? 'active' : (capturedImage ? 'completed' : 'idle'), icon: '📷' },
-    { label: 'Object Detection', status: simStep >= 1 ? (simStep === 1 ? 'loading' : 'completed') : 'idle', icon: '🎯' },
-    { label: 'OCR Label Read', status: simStep >= 2 ? (simStep === 2 ? 'loading' : 'completed') : 'idle', icon: '📝' },
-    { label: 'Compliance Audit', status: simStep >= 3 ? (simStep === 3 ? 'loading' : 'completed') : 'idle', icon: '🛡️' },
-    { label: 'AI Risk Analysis', status: simStep >= 4 ? 'completed' : 'idle', icon: '🧠' },
-    { label: 'Report Generation', status: simStep >= 4 ? 'completed' : 'idle', icon: '📄' }
-  ];
-
-  const detectionObjects = [
-    { name: 'Product Outline', conf: simStep >= 1 ? (simStep === 1 ? 75 : 98) : 0 },
-    { name: 'Label Wrapper', conf: simStep >= 1 ? (simStep === 1 ? 60 : 99) : 0 },
-    { name: 'EAN Barcode', conf: simStep >= 2 ? (simStep === 2 ? 82 : 95) : 0 },
-    { name: 'Corporate Brand Logo', conf: simStep >= 1 ? 92 : 0 },
-    { name: 'LMPC Declarations Text', conf: simStep >= 2 ? (simStep === 2 ? 45 : 97) : 0 }
+    { label: 'Object Detection', status: isAnalyzing ? 'loading' : (pipelineError ? 'error' : (detectedProduct ? 'completed' : 'idle')), icon: '🎯' },
+    { label: 'OCR Label Read', status: 'idle', icon: '📝' },
+    { label: 'Compliance Audit', status: 'idle', icon: '🛡️' },
+    { label: 'AI Risk Analysis', status: 'idle', icon: '🧠' },
+    { label: 'Report Generation', status: 'idle', icon: '📄' }
   ];
 
   const timelineLogs = [
-    { desc: 'AI Scanner Subsystem Initialized', status: 'completed', time: '20:24:01' },
-    { desc: stream ? 'Webcam live stream active' : (capturedImage ? 'Frame buffer stored' : 'Inspection Camera Buffer Ready'), status: 'completed', time: '20:24:02' },
-    { desc: simStep >= 1 ? 'Detecting pre-packaged commodity wrapper...' : 'Waiting for product placement...', status: simStep >= 1 ? 'completed' : 'pending', time: '20:24:05' },
-    { desc: simStep >= 2 ? 'OCR reading font heights and mandatory labels...' : 'Ready to analyze label attributes...', status: simStep >= 2 ? 'completed' : 'pending', time: '20:24:08' }
+    { desc: 'AI Scanner Subsystem Initialized', status: 'completed', time: '20:29:01' },
+    { desc: stream ? 'Webcam live stream active' : (capturedImage ? 'Frame buffer stored' : 'Inspection Camera Buffer Ready'), status: 'completed', time: '20:29:02' },
+    { 
+      desc: isAnalyzing 
+        ? 'Sending captured frame to Hugging Face model...' 
+        : (pipelineError 
+          ? `Object detection failed: ${pipelineError}` 
+          : (detectedProduct 
+            ? `Successfully detected: ${detectedProduct} (${detectionConfidence}%)` 
+            : 'Waiting for object placement...')), 
+      status: isAnalyzing ? 'pending' : (pipelineError ? 'error' : (detectedProduct ? 'completed' : 'pending')), 
+      time: '20:29:05' 
+    },
+    { desc: 'OCR Text parsing (Disabled in Phase 5B)', status: 'pending', time: '20:29:08' }
   ];
 
   return (
@@ -196,8 +228,8 @@ export default function Scanner() {
           
           <div className="header-actions">
             <div className="sys-status-badge">
-              <span className={`status-led ${simStep > 0 && simStep < 4 ? 'scanning' : (stream ? 'idle' : 'inactive')}`}></span>
-              <span>SYSTEM: {simStep === 4 ? 'READY' : (simStep > 0 ? 'SCANNING...' : (stream ? 'LIVE FEED' : 'OFFLINE'))}</span>
+              <span className={`status-led ${isAnalyzing ? 'scanning' : (stream ? 'idle' : 'inactive')}`}></span>
+              <span>SYSTEM: {isAnalyzing ? 'SCANNING...' : (stream ? 'LIVE FEED' : 'OFFLINE')}</span>
             </div>
           </div>
         </header>
@@ -219,11 +251,11 @@ export default function Scanner() {
               {/* Glass Scan overlay */}
               <div className="camera-glass-overlay"></div>
               
-              {/* Camera flash trigger overlay */}
+              {/* Camera flash overlay */}
               <div className={`camera-flash-overlay ${flashActive ? 'flash' : ''}`}></div>
               
               {/* Animated laser line */}
-              <div className={`laser-scan-line ${simStep > 0 && simStep < 4 ? 'active' : ''}`}></div>
+              <div className={`laser-scan-line ${isAnalyzing ? 'active' : ''}`}></div>
 
               {/* Floating Fullscreen button inside webcam frame (top-right) */}
               {(stream || capturedImage) && (
@@ -262,17 +294,30 @@ export default function Scanner() {
                 />
               ) : capturedImage ? (
                 <div className="captured-image-wrapper">
-                  <img src={capturedImage} alt="Captured preview" className="captured-preview-element" />
+                  <BoundingBoxOverlay 
+                    imageSrc={capturedImage}
+                    boundingBoxes={boundingBoxes}
+                    isLoading={isAnalyzing}
+                  />
                   <div className="capture-preview-badge">CAP-BUFFER-01</div>
                   
                   {/* Option overlays */}
-                  {simStep === 0 && (
+                  {!isAnalyzing && !detectedProduct && !pipelineError && (
                     <div className="capture-options-overlay">
                       <button className="btn btn-ghost" style={{ padding: '8px 16px', fontSize: '12.5px', background: 'rgba(0,0,0,0.65)' }} onClick={deleteCapturedFrame}>
                         ✕ Delete & Retake
                       </button>
                       <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '12.5px' }} onClick={useCapturedFrame}>
                         ⚡ Use Image & Analyze
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Reset/Retake when analysis finishes or errors */}
+                  {(detectedProduct || pipelineError) && !isAnalyzing && (
+                    <div className="capture-options-overlay">
+                      <button className="btn btn-ghost" style={{ padding: '8px 16px', fontSize: '12.5px', background: 'rgba(0,0,0,0.65)' }} onClick={deleteCapturedFrame}>
+                        ✕ Reset & Scan Again
                       </button>
                     </div>
                   )}
@@ -285,14 +330,6 @@ export default function Scanner() {
                     <line x1="50" y1="15" x2="50" y2="85" className="reticle-crosshair" />
                     <line x1="15" y1="50" x2="85" y2="50" className="reticle-crosshair" />
                   </svg>
-                  
-                  {simStep > 0 && simStep < 4 && (
-                    <motion.div 
-                      className="scanning-pulse-ring"
-                      animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.8, 0.3] }}
-                      transition={{ repeat: Infinity, duration: 2 }}
-                    />
-                  )}
                 </div>
               )}
 
@@ -312,9 +349,8 @@ export default function Scanner() {
               </div>
             </div>
 
-            {/* Redesigned Camera Controls (Large and Premium Layout) */}
+            {/* Redesigned Camera Controls */}
             <div className="camera-controls-panel-v2">
-              {/* Start Camera Button (rounded pill primary accent) */}
               <button 
                 className="premium-btn start-camera-btn" 
                 onClick={startCameraFeed}
@@ -328,7 +364,6 @@ export default function Scanner() {
                 <span>Start Camera</span>
               </button>
 
-              {/* DSLR Circular Shutter Capture Button */}
               <div className="shutter-control-wrapper">
                 <button 
                   className="camera-shutter-btn" 
@@ -340,9 +375,7 @@ export default function Scanner() {
                 </button>
               </div>
 
-              {/* Right Button and Torch floating icon */}
               <div className="right-controls-group">
-                {/* Stop Camera Button (red accent pill design) */}
                 <button 
                   className="premium-btn stop-camera-btn" 
                   onClick={stopCameraFeed}
@@ -355,7 +388,6 @@ export default function Scanner() {
                   <span>Stop Camera</span>
                 </button>
 
-                {/* Torch Floating Icon Button */}
                 <button 
                   className={`torch-btn ${flashActive ? 'active' : ''}`}
                   disabled={!stream}
@@ -412,29 +444,25 @@ export default function Scanner() {
                 </div>
                 <div className="diag-row">
                   <span>AI Predictor Node</span>
-                  <span className={`diag-val-badge ${simStep >= 1 ? 'active' : 'idle'}`}>
+                  <span className={`diag-val-badge ${isAnalyzing ? 'active' : (pipelineError ? 'error' : (detectedProduct ? 'completed' : 'idle'))}`}>
                     <span className="diag-dot"></span>
-                    {simStep >= 4 ? 'READY' : (simStep >= 1 ? 'PROCESSING...' : 'IDLE')}
+                    {isAnalyzing ? 'PROCESSING...' : (pipelineError ? 'ERROR' : (detectedProduct ? 'COMPLETED' : 'IDLE'))}
                   </span>
                 </div>
                 <div className="diag-row">
-                  <span>OCR Text Parser</span>
-                  <span className={`diag-val-badge ${simStep >= 2 ? 'active' : 'idle'}`}>
-                    <span className="diag-dot"></span>
-                    {simStep >= 4 ? 'READY' : (simStep >= 2 ? 'PARSING...' : 'IDLE')}
-                  </span>
-                </div>
-                <div className="diag-row">
-                  <span>Metrology Validator</span>
-                  <span className={`diag-val-badge ${simStep >= 3 ? 'active' : 'idle'}`}>
-                    <span className="diag-dot"></span>
-                    {simStep >= 4 ? 'READY' : (simStep >= 3 ? 'COMPARING...' : 'IDLE')}
-                  </span>
+                  <span>Detected Product</span>
+                  <strong className="diag-text-val">{detectedProduct || 'None'}</strong>
                 </div>
                 <div className="diag-row">
                   <span>Confidence Level</span>
                   <span className="diag-conf-text mono">
-                    {simStep === 4 ? '99.8%' : (simStep === 3 ? '92.4%' : (simStep === 2 ? '78.5%' : (simStep === 1 ? '45.0%' : '0%')))}
+                    {detectedProduct ? `${detectionConfidence}%` : '0%'}
+                  </span>
+                </div>
+                <div className="diag-row">
+                  <span>Inference Time</span>
+                  <span className="diag-conf-text mono">
+                    {detectedProduct ? `${inferenceTime}ms` : '0ms'}
                   </span>
                 </div>
               </div>
@@ -442,7 +470,7 @@ export default function Scanner() {
 
             {/* Interactive display area: Empty State vs Loaded Results */}
             <AnimatePresence mode="wait">
-              {simStep < 4 ? (
+              {(!detectedProduct && !pipelineError) ? (
                 <motion.div 
                   key="empty-state"
                   className="scanner-card empty-result-card"
@@ -458,14 +486,38 @@ export default function Scanner() {
                     </svg>
                   </div>
                   <h3>No product detected yet.</h3>
-                  <p>Start the camera feed, capture an image, and click "Use Image & Analyze" to begin auditing metrology rules.</p>
+                  <p>Start the camera feed, capture an image, and click "Use Image & Analyze" to run real-time Hugging Face Object Detection.</p>
                   
-                  {/* Shimmering placeholders for preview */}
-                  <div className="shimmer-placeholder-block">
-                    <div className="shimmer-row w-full"></div>
-                    <div className="shimmer-row w-half"></div>
-                    <div className="shimmer-row w-third"></div>
+                  {isAnalyzing && (
+                    <div className="shimmer-placeholder-block">
+                      <div className="shimmer-row w-full"></div>
+                      <div className="shimmer-row w-half"></div>
+                      <div className="shimmer-row w-third"></div>
+                    </div>
+                  )}
+                </motion.div>
+              ) : pipelineError ? (
+                <motion.div 
+                  key="error-state"
+                  className="scanner-card empty-result-card"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ border: '1px solid rgba(239, 68, 68, 0.2)' }}
+                >
+                  <div className="empty-graphic" style={{ background: 'rgba(239,68,68,0.06)', color: 'var(--error)' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
                   </div>
+                  <h3>Detection Failed</h3>
+                  <p style={{ color: 'var(--error)', fontWeight: 500 }}>{pipelineError}</p>
+                  <button className="btn btn-primary" onClick={deleteCapturedFrame} style={{ marginTop: '12px', fontSize: '13px' }}>
+                    ✕ Retake Shutter
+                  </button>
                 </motion.div>
               ) : (
                 <motion.div 
@@ -476,75 +528,94 @@ export default function Scanner() {
                   exit={{ opacity: 0, y: -15 }}
                   transition={{ duration: 0.3 }}
                 >
-                  {/* Compliance Card */}
-                  <div className="scanner-card compliance-verdict-card">
-                    <div className="compliance-header-verdict">
-                      <div>
-                        <h4>Compliance Auditor Score</h4>
-                        <p>Regulatory verdict output</p>
-                      </div>
-                      <span className="verdict-score-badge compliant">100% PASS</span>
-                    </div>
-                    
-                    <div className="compliance-lists-group">
-                      <div className="compliance-item-meta">
-                        <strong>Missing Required Fields:</strong>
-                        <span className="text-muted">None (All 12 declarations present)</span>
-                      </div>
-                      <div className="compliance-item-meta">
-                        <strong>LMPC Warnings:</strong>
-                        <span className="text-warning">Net Qty typography size is bordering 2.0mm.</span>
-                      </div>
-                      <div className="compliance-item-meta">
-                        <strong>LMPC Recommendation:</strong>
-                        <span className="text-gold">Increase Net Qty font print to 3.0mm for improved visibility.</span>
-                      </div>
-                      <div className="compliance-item-meta">
-                        <strong>Legal Rule Reference:</strong>
-                        <span className="text-link">LMPC Rules, 2011 • Schedule II Clause 4</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Product Details */}
-                  <div className="scanner-card product-details-card">
-                    <h4>Identified Metrology Declarations</h4>
-                    <div className="details-grid-table">
-                      <div className="details-tbl-row"><span>Product Name</span><strong>Parle-G Gold Biscuits</strong></div>
-                      <div className="details-tbl-row"><span>Brand</span><strong>Parle</strong></div>
-                      <div className="details-tbl-row"><span>Category</span><strong>Food Products</strong></div>
-                      <div className="details-tbl-row"><span>MRP</span><strong>₹10.00 (Incl. of all taxes)</strong></div>
-                      <div className="details-tbl-row"><span>Net Quantity</span><strong>100g</strong></div>
-                      <div className="details-tbl-row"><span>Manufacturer</span><strong>Parle Products Pvt. Ltd.</strong></div>
-                      <div className="details-tbl-row"><span>Importer Address</span><strong>N/A (Domestic)</strong></div>
-                      <div className="details-tbl-row"><span>Batch Number</span><strong>PGG-0626A</strong></div>
-                      <div className="details-tbl-row"><span>Manufacturing Date</span><strong>06/2026</strong></div>
-                      <div className="details-tbl-row"><span>Expiry / Best Before</span><strong>12/2026</strong></div>
-                      <div className="details-tbl-row"><span>Barcode Code</span><strong>8901725181223</strong></div>
-                      <div className="details-tbl-row"><span>Country of Origin</span><strong>India</strong></div>
-                    </div>
-                  </div>
-
-                  {/* AI Detections List */}
+                  {/* Bounding Box Object Predictions */}
                   <div className="scanner-card detections-accuracy-card">
                     <h4>Bounding Box Object Predictions</h4>
                     <div className="detections-progress-list">
-                      {detectionObjects.map((obj, idx) => (
+                      {boundingBoxes.map((obj, idx) => (
                         <div key={idx} className="det-progress-item">
                           <div className="det-progress-labels">
-                            <span>{obj.name}</span>
-                            <span className="mono">{obj.conf}%</span>
+                            <span>{obj.label}</span>
+                            <span className="mono">{obj.confidence}%</span>
                           </div>
                           <div className="det-progress-track">
                             <motion.div 
                               className="det-progress-fill"
                               initial={{ width: 0 }}
-                              animate={{ width: `${obj.conf}%` }}
+                              animate={{ width: `${obj.confidence}%` }}
                               transition={{ duration: 0.8, delay: idx * 0.05 }}
                             />
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Warning banner if multiple products found */}
+                  {pipelineWarning && (
+                    <div className="warning-banner-callout" style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      background: 'rgba(245, 158, 11, 0.07)',
+                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      color: '#b45309',
+                      fontSize: '12.5px',
+                      lineHeight: '1.4'
+                    }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '16px', height: '16px', flexShrink: 0 }}>
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                      <span>{pipelineWarning}</span>
+                    </div>
+                  )}
+
+                  {/* Product Details (OCR Slated for Phase 5C) */}
+                  <div className="scanner-card product-details-card" style={{ position: 'relative', opacity: 0.75 }}>
+                    <h4>Identified Metrology Declarations</h4>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      padding: '24px 12px',
+                      background: 'rgba(28, 14, 16, 0.02)',
+                      border: '1px dashed var(--border)',
+                      borderRadius: '8px'
+                    }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: '32px', height: '32px', color: 'var(--gray-light)', marginBottom: '8px' }}>
+                        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <p style={{ fontSize: '12px', color: 'var(--gray-light)', margin: 0 }}>
+                        OCR Text extraction & Barcode scanning are disabled in Phase 5B (Object Detection only).
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Compliance Card (Slated for Phase 5C) */}
+                  <div className="scanner-card compliance-verdict-card" style={{ position: 'relative', opacity: 0.75 }}>
+                    <div className="compliance-header-verdict">
+                      <div>
+                        <h4>Compliance Auditor Score</h4>
+                        <p>Regulatory verdict output</p>
+                      </div>
+                      <span className="verdict-score-badge pending" style={{ background: 'rgba(28, 14, 16, 0.04)', color: 'var(--gray-light)' }}>PENDING</span>
+                    </div>
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '16px 12px',
+                      background: 'rgba(28, 14, 16, 0.02)',
+                      border: '1px dashed var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: 'var(--gray-light)'
+                    }}>
+                      LMPC rules auditing awaits OCR label text input (Slated for Phase 5C).
                     </div>
                   </div>
                 </motion.div>
@@ -787,12 +858,6 @@ export default function Scanner() {
           z-index: 1;
         }
 
-        .captured-preview-element {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
         .capture-preview-badge {
           position: absolute;
           top: 20px;
@@ -882,15 +947,6 @@ export default function Scanner() {
           stroke: currentColor;
           stroke-width: 0.8;
           stroke-dasharray: 2 6;
-        }
-
-        .scanning-pulse-ring {
-          position: absolute;
-          width: 120px;
-          height: 120px;
-          border-radius: 50%;
-          border: 2px solid rgba(196, 30, 58, 0.4);
-          pointer-events: none;
         }
 
         /* Floating Fullscreen button inside webcam */
@@ -1371,6 +1427,12 @@ export default function Scanner() {
           border: 1px solid var(--border);
         }
 
+        .diag-val-badge.error {
+          background-color: rgba(239, 68, 68, 0.08);
+          color: var(--error);
+          border: 1px solid rgba(239, 68, 68, 0.15);
+        }
+
         .diag-dot {
           width: 5px;
           height: 5px;
@@ -1383,9 +1445,24 @@ export default function Scanner() {
           animation: pulse-dot 1.2s infinite;
         }
 
+        .scanning .diag-dot {
+          background-color: var(--primary);
+          animation: pulse-dot 1s infinite;
+        }
+
+        .error .diag-dot {
+          background-color: var(--error);
+        }
+
         @keyframes pulse-dot {
           from { opacity: 0.5; }
           to { opacity: 1; }
+        }
+
+        .diag-text-val {
+          font-size: 13px;
+          color: var(--ink);
+          font-weight: 600;
         }
 
         .diag-conf-text {
@@ -1645,6 +1722,10 @@ export default function Scanner() {
         .feed-dot.pending {
           background-color: var(--gray-light);
           opacity: 0.5;
+        }
+
+        .feed-dot.error {
+          background-color: var(--error);
         }
 
         .feed-text-block {
