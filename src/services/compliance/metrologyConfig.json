@@ -1,0 +1,23 @@
+{
+  "requiredFields": [
+    "MRP",
+    "Net Quantity",
+    "Manufacturer",
+    "Batch Number",
+    "Date of Manufacture"
+  ],
+  "standardTolerances": {
+    "units": {
+      "g": "grams",
+      "kg": "kilograms",
+      "ml": "milliliters",
+      "l": "liters"
+    },
+    "maxPermissibleError": {
+      "50g": "9%",
+      "100g": "4.5g",
+      "500g": "15g",
+      "1kg": "1.5%"
+    }
+  }
+}

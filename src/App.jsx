@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import useAuth from './hooks/useAuth';
 
 // Layouts
 import PublicLayout from './components/Layout/PublicLayout';
@@ -22,43 +23,58 @@ import Reports from './pages/Reports';
 import History from './pages/History';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
+import Assistant from './pages/Assistant';
 import NotFound from './pages/NotFound';
+
+// Feedback & Loading
+import LoadingScreen from './components/Loader/LoadingScreen';
+import ToastContainer from './components/Toast/ToastContainer';
 
 export default function App() {
   const location = useLocation();
+  const { loading } = useAuth();
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        {/* Public Routes wrapped in PublicLayout */}
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-        </Route>
+    <>
+      <AnimatePresence mode="wait">
+        {loading && <LoadingScreen key="loading-screen" />}
+      </AnimatePresence>
 
-        {/* Protected Dashboard Routes wrapped in DashboardLayout */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/scanner" element={<Scanner />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/settings" element={<Settings />} />
-        </Route>
+      <ToastContainer />
 
-        {/* Standalone 404 Route */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </AnimatePresence>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          {/* Public Routes wrapped in PublicLayout */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+          </Route>
+
+          {/* Protected Dashboard Routes wrapped in DashboardLayout */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/scanner" element={<Scanner />} />
+            <Route path="/upload" element={<Upload />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/assistant" element={<Assistant />} />
+          </Route>
+
+          {/* Standalone 404 Route */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AnimatePresence>
+    </>
   );
 }

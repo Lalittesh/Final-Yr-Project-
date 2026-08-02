@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import useAuth from '../hooks/useAuth';
@@ -10,17 +10,33 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   
   // Inline Validation states
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [generalError, setGeneralError] = useState('');
 
-  const { login, isLoading } = useAuth();
+  const { login, showToast } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || '/dashboard';
+
+  // Check for remembered email and registration redirect messages
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('remembered_email');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+
+    if (location.state?.message) {
+      showToast(location.state.message, 'success');
+      // Clear location state message
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, showToast, navigate]);
 
   const validateEmail = (val) => {
     if (!val) {
@@ -61,15 +77,19 @@ export default function Login() {
     }
 
     try {
+      setSubmitting(true);
       await login(email, password);
-      // If remember me is checked, we can simulate storing email
+      
       if (rememberMe) {
         localStorage.setItem('remembered_email', email);
       } else {
         localStorage.removeItem('remembered_email');
       }
+      
+      setSubmitting(false);
       navigate(from, { replace: true });
     } catch (err) {
+      setSubmitting(false);
       setGeneralError(err?.message || 'Authentication failed. Please verify credentials.');
     }
   };
@@ -79,10 +99,13 @@ export default function Login() {
     setEmailError('');
     setPasswordError('');
     try {
+      setSubmitting(true);
       // Simulate Guest login
       await login('guest@metro-compliance.gov.in', 'guest_password_123');
+      setSubmitting(false);
       navigate(from, { replace: true });
     } catch (err) {
+      setSubmitting(false);
       setGeneralError('Guest login failed. Please try again.');
     }
   };
@@ -142,7 +165,7 @@ export default function Login() {
             <p className="login-subtitle">Sign in with credentials to access AI audits and checks</p>
           </motion.div>
 
-          {isLoading ? (
+          {submitting ? (
             <div className="login-loader-container">
               <Loader />
             </div>
@@ -255,6 +278,7 @@ export default function Login() {
                 className="btn btn-primary login-btn"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
+                disabled={submitting}
               >
                 <span>Authorize & Sign In</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -275,6 +299,7 @@ export default function Login() {
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 onClick={() => setGeneralError('Google OAuth is disabled for this environment.')}
+                disabled={submitting}
               >
                 <svg className="google-icon" viewBox="0 0 24 24">
                   <path
@@ -304,6 +329,7 @@ export default function Login() {
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 onClick={handleGuestLogin}
+                disabled={submitting}
               >
                 <span>Continue as Guest Inspector</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px' }}>

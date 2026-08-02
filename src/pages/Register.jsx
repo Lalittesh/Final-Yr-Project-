@@ -24,8 +24,9 @@ export default function Register() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [termsError, setTermsError] = useState('');
   const [generalError, setGeneralError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const { register, isLoading } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
 
   // Validator Functions
@@ -130,9 +131,12 @@ export default function Register() {
     }
 
     try {
-      await register(name, email, password);
-      navigate('/dashboard');
+      setSubmitting(true);
+      await register(name, email, password, org, role);
+      setSubmitting(false);
+      navigate('/login', { state: { message: 'Account created successfully' } });
     } catch (err) {
+      setSubmitting(false);
       setGeneralError(err?.message || 'Registration failed. Please try again.');
     }
   };
@@ -183,7 +187,7 @@ export default function Register() {
             <p className="register-subtitle">Request credential authorization for AI label checks</p>
           </motion.div>
 
-          {isLoading ? (
+          {submitting ? (
             <div className="register-loader-container">
               <Loader />
             </div>
@@ -430,6 +434,7 @@ export default function Register() {
                 className="btn btn-primary login-btn"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
+                disabled={submitting}
               >
                 <span>Create Secure Account</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -450,6 +455,7 @@ export default function Register() {
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 onClick={() => setGeneralError('SSO registration is currently unavailable.')}
+                disabled={submitting}
               >
                 <svg className="google-icon" viewBox="0 0 24 24">
                   <path
