@@ -11,6 +11,7 @@ export default function Scanner() {
   const [cameraError, setCameraError] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
   const [flashActive, setFlashActive] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
 
   // Simulation & Pipeline States
   const [isSimulating, setIsSimulating] = useState(false);
@@ -18,6 +19,14 @@ export default function Scanner() {
 
   const videoRef = useRef(null);
   const previewContainerRef = useRef(null);
+
+  // Update HUD Clock
+  useEffect(() => {
+    const clockTimer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString());
+    }, 1000);
+    return () => clearInterval(clockTimer);
+  }, []);
 
   // Bind video stream to ref object when stream is established
   useEffect(() => {
@@ -89,7 +98,7 @@ export default function Scanner() {
     }
   };
 
-  // Trigger fullscreen on preview card
+  // Trigger fullscreen on preview container
   const toggleFullscreen = () => {
     if (previewContainerRef.current) {
       if (!document.fullscreenElement) {
@@ -159,10 +168,10 @@ export default function Scanner() {
   ];
 
   const timelineLogs = [
-    { desc: 'AI Scanner Subsystem Initialized', status: 'completed', time: '19:58:01' },
-    { desc: stream ? 'Webcam live stream active' : (capturedImage ? 'Frame buffer stored' : 'Inspection Camera Buffer Ready'), status: 'completed', time: '19:58:02' },
-    { desc: simStep >= 1 ? 'Detecting pre-packaged commodity wrapper...' : 'Waiting for product placement...', status: simStep >= 1 ? 'completed' : 'pending', time: '19:58:05' },
-    { desc: simStep >= 2 ? 'OCR reading font heights and mandatory labels...' : 'Ready to analyze label attributes...', status: simStep >= 2 ? 'completed' : 'pending', time: '19:58:08' }
+    { desc: 'AI Scanner Subsystem Initialized', status: 'completed', time: '20:24:01' },
+    { desc: stream ? 'Webcam live stream active' : (capturedImage ? 'Frame buffer stored' : 'Inspection Camera Buffer Ready'), status: 'completed', time: '20:24:02' },
+    { desc: simStep >= 1 ? 'Detecting pre-packaged commodity wrapper...' : 'Waiting for product placement...', status: simStep >= 1 ? 'completed' : 'pending', time: '20:24:05' },
+    { desc: simStep >= 2 ? 'OCR reading font heights and mandatory labels...' : 'Ready to analyze label attributes...', status: simStep >= 2 ? 'completed' : 'pending', time: '20:24:08' }
   ];
 
   return (
@@ -196,11 +205,12 @@ export default function Scanner() {
         {/* Main Workspace Grid */}
         <div className="scanner-grid">
           
-          {/* Left Column: Camera Preview, Controls, Drag & Drop Upload, Process Map */}
+          {/* Left Column: Camera Preview, Controls, Process Map */}
           <div className="scanner-col-main">
             
             {/* 16:9 Camera Preview Box */}
             <div className="camera-preview-box" ref={previewContainerRef}>
+              {/* corner brackets */}
               <div className="corner top-left"></div>
               <div className="corner top-right"></div>
               <div className="corner bottom-left"></div>
@@ -214,6 +224,19 @@ export default function Scanner() {
               
               {/* Animated laser line */}
               <div className={`laser-scan-line ${simStep > 0 && simStep < 4 ? 'active' : ''}`}></div>
+
+              {/* Floating Fullscreen button inside webcam frame (top-right) */}
+              {(stream || capturedImage) && (
+                <button 
+                  className="floating-fullscreen-btn"
+                  onClick={toggleFullscreen}
+                  title="Toggles fullscreen mode"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                  </svg>
+                </button>
+              )}
 
               {/* Feed Logic */}
               {cameraError ? (
@@ -270,98 +293,81 @@ export default function Scanner() {
                       transition={{ repeat: Infinity, duration: 2 }}
                     />
                   )}
-                  
-                  <div className="camera-overlay-info">
-                    <span className="info-label">RESOLUTION: UHD 3840×2160</span>
-                    <span className="info-label">FPS: 60.00 FPS</span>
-                    <span className="info-label">LENS: AUTO_FOCUS_MACRO</span>
-                  </div>
                 </div>
               )}
+
+              {/* Dynamic HUD Overlays */}
+              <div className="camera-overlay-info">
+                <span className="info-label">RESOLUTION: UHD 3840×2160</span>
+                <span className="info-label">FPS: 60.00 FPS</span>
+                <span className="info-label flex-align-hud">
+                  {stream && (
+                    <span className="rec-indicator">
+                      <span className="rec-dot"></span>
+                      <span>REC</span>
+                    </span>
+                  )}
+                  <span>{currentTime}</span>
+                </span>
+              </div>
             </div>
 
-            {/* Camera Active Controls */}
-            <div className="camera-controls-panel">
+            {/* Redesigned Camera Controls (Large and Premium Layout) */}
+            <div className="camera-controls-panel-v2">
+              {/* Start Camera Button (rounded pill primary accent) */}
               <button 
-                className={`ctrl-btn ${stream ? 'active' : ''}`} 
+                className="premium-btn start-camera-btn" 
                 onClick={startCameraFeed}
                 disabled={!!stream}
-                title="Request live video feed from camera device"
+                title="Start webcam live stream"
               >
+                <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
                 <span>Start Camera</span>
               </button>
-              
-              <button 
-                className="ctrl-btn" 
-                onClick={stopCameraFeed}
-                disabled={!stream}
-                title="Disconnect camera stream"
-              >
-                <span>Stop Camera</span>
-              </button>
-              
-              <button 
-                className="ctrl-btn" 
-                onClick={captureCurrentFrame}
-                disabled={!stream}
-                title="Capture frame buffer from live feed"
-              >
-                <span>Capture Image</span>
-              </button>
-              
-              <button 
-                className="ctrl-btn" 
-                onClick={switchCameraLens}
-                disabled={!stream}
-                title="Toggle facing mode front/back lens"
-              >
-                <span>Switch Camera</span>
-              </button>
-              
-              <button 
-                className="ctrl-btn" 
-                disabled={!stream}
-                onClick={() => {
-                  setFlashActive(true);
-                  setTimeout(() => setFlashActive(false), 250);
-                }}
-                title="Flash trigger simulation"
-              >
-                <span>Flash</span>
-              </button>
-              
-              <button 
-                className="ctrl-btn" 
-                disabled={!stream && !capturedImage}
-                onClick={toggleFullscreen}
-                title="Toggles fullscreen mode"
-              >
-                <span>Fullscreen</span>
-              </button>
-            </div>
 
-            {/* Drag & Drop Upload Section */}
-            <div className="scanner-card upload-panel">
-              <div className="upload-dropzone">
-                <div className="upload-icon-wrapper">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                </div>
-                <h4>Drag & drop product packaging here</h4>
-                <p>Or click to browse from local terminal (PNG, JPEG, WEBP up to 10MB)</p>
-                
-                <button className="btn btn-google" style={{ marginTop: '12px', fontSize: '13px', padding: '10px 20px' }} disabled>
-                  Browse Files
+              {/* DSLR Circular Shutter Capture Button */}
+              <div className="shutter-control-wrapper">
+                <button 
+                  className="camera-shutter-btn" 
+                  onClick={captureCurrentFrame}
+                  disabled={!stream}
+                  title="Capture current video frame buffer"
+                >
+                  <div className="shutter-inner"></div>
                 </button>
               </div>
 
-              <div className="upload-footer-actions">
-                <span className="file-desc-lbl">No file selected</span>
-                <button className="btn btn-primary" disabled style={{ fontSize: '13px', padding: '10px 24px' }}>
-                  Analyze Image
+              {/* Right Button and Torch floating icon */}
+              <div className="right-controls-group">
+                {/* Stop Camera Button (red accent pill design) */}
+                <button 
+                  className="premium-btn stop-camera-btn" 
+                  onClick={stopCameraFeed}
+                  disabled={!stream}
+                  title="Stop camera live stream"
+                >
+                  <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  </svg>
+                  <span>Stop Camera</span>
+                </button>
+
+                {/* Torch Floating Icon Button */}
+                <button 
+                  className={`torch-btn ${flashActive ? 'active' : ''}`}
+                  disabled={!stream}
+                  onClick={() => {
+                    setFlashActive(true);
+                    setTimeout(() => setFlashActive(false), 250);
+                  }}
+                  title="Trigger flashlight simulated pulse"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M18 2H6v3h12V2zM6 9v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9H6zm6 7v3"/>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -727,7 +733,7 @@ export default function Scanner() {
         /* Camera Box Placeholder */
         .camera-preview-box {
           aspect-ratio: 16/9;
-          background: #11090a;
+          background: #0b0506;
           border-radius: var(--radius-md, 18px);
           border: 1px solid var(--border);
           position: relative;
@@ -887,6 +893,43 @@ export default function Scanner() {
           pointer-events: none;
         }
 
+        /* Floating Fullscreen button inside webcam */
+        .floating-fullscreen-btn {
+          position: absolute;
+          top: 18px;
+          right: 18px;
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(8px);
+          border: 1.5px solid rgba(255, 255, 255, 0.3);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 10;
+          transition: all 0.3s;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .floating-fullscreen-btn:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: scale(1.08);
+          border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .floating-fullscreen-btn:active {
+          transform: scale(0.95);
+        }
+
+        .floating-fullscreen-btn svg {
+          width: 16px;
+          height: 16px;
+        }
+
+        /* Camera HUD overlays */
         .camera-overlay-info {
           position: absolute;
           bottom: 20px;
@@ -896,8 +939,36 @@ export default function Scanner() {
           justify-content: space-between;
           font-family: 'JetBrains Mono', monospace;
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.4);
+          color: rgba(255, 255, 255, 0.45);
           z-index: 5;
+          letter-spacing: 0.05em;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        .flex-align-hud {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .rec-indicator {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          color: var(--error);
+          font-weight: 700;
+        }
+
+        .rec-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background-color: var(--error);
+          animation: rec-dot-blink 1s steps(2, start) infinite;
+        }
+
+        @keyframes rec-dot-blink {
+          to { visibility: hidden; }
         }
 
         /* Error message */
@@ -933,110 +1004,211 @@ export default function Scanner() {
           line-height: 1.5;
         }
 
-        /* Camera controls */
-        .camera-controls-panel {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-          gap: 12px;
+        /* Redesigned Camera Controls (Large & Premium Layout) */
+        .camera-controls-panel-v2 {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           background: var(--glass-strong);
           border: 1px solid var(--border);
-          border-radius: var(--radius-sm, 12px);
-          padding: 12px;
+          border-radius: var(--radius-md, 18px);
+          padding: 16px 28px;
+          gap: 16px;
+          box-shadow: var(--shadow-lift);
         }
 
-        .ctrl-btn {
-          border-radius: 8px;
-          padding: 10px 8px;
-          font-size: 12.5px;
-          font-weight: 700;
-          text-align: center;
-          border: 1.5px solid var(--border);
-          background: rgba(255, 255, 255, 0.6);
-          color: var(--ink);
-          cursor: pointer;
-          font-family: 'Inter', sans-serif;
-          transition: all 0.3s;
+        @media (max-width: 640px) {
+          .camera-controls-panel-v2 {
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+          }
         }
 
-        .ctrl-btn:not(:disabled):hover {
-          border-color: var(--gold);
-          color: var(--primary);
-          background-color: #fff;
-          transform: translateY(-1px);
-        }
-
-        .ctrl-btn:disabled {
-          color: var(--gray-light);
-          border-color: var(--border);
-          background-color: rgba(28, 14, 16, 0.02);
-          cursor: not-allowed;
-          opacity: 0.6;
-        }
-
-        .ctrl-btn.active {
-          background-color: rgba(196, 30, 58, 0.05);
-          border-color: var(--primary);
-          color: var(--primary);
-        }
-
-        /* Upload panel */
-        .upload-dropzone {
-          border: 2px dashed var(--border);
-          border-radius: var(--radius-sm, 12px);
-          padding: 32px 20px;
-          text-align: center;
-          background: rgba(255, 255, 255, 0.2);
-          display: flex;
-          flex-direction: column;
+        .premium-btn {
+          display: inline-flex;
           align-items: center;
-          gap: 8px;
+          justify-content: center;
+          gap: 10px;
+          padding: 14px 28px;
+          font-size: 14px;
+          font-weight: 700;
+          font-family: 'Inter', sans-serif;
+          border-radius: 999px;
+          border: none;
+          cursor: pointer;
+          transition: all 0.3s;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
         }
 
-        .upload-icon-wrapper {
-          width: 48px;
-          height: 48px;
+        .premium-btn .btn-icon {
+          width: 18px;
+          height: 18px;
+        }
+
+        /* Start Camera Button Details */
+        .start-camera-btn {
+          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+          color: #fff;
+          box-shadow: 0 4px 20px rgba(196, 30, 58, 0.25);
+        }
+
+        .start-camera-btn:not(:disabled):hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 25px rgba(196, 30, 58, 0.35);
+          filter: brightness(1.1);
+        }
+
+        .start-camera-btn:not(:disabled):active {
+          transform: translateY(0);
+          box-shadow: 0 4px 15px rgba(196, 30, 58, 0.25);
+        }
+
+        .start-camera-btn:disabled {
+          background: var(--border);
+          color: var(--gray-light);
+          box-shadow: none;
+          cursor: not-allowed;
+        }
+
+        /* DSLR Shutter Button Control */
+        .shutter-control-wrapper {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          flex-shrink: 0;
+        }
+
+        .camera-shutter-btn {
+          width: 72px;
+          height: 72px;
           border-radius: 50%;
-          background: rgba(196, 30, 58, 0.05);
-          color: var(--primary);
+          background: transparent;
+          border: 4px solid #fff;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 4px;
+          cursor: pointer;
+          transition: all 0.3s;
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), inset 0 2px 5px rgba(255, 255, 255, 0.2);
+          padding: 0;
         }
 
-        .upload-icon-wrapper svg {
-          width: 22px;
-          height: 22px;
+        .camera-shutter-btn .shutter-inner {
+          width: 54px;
+          height: 54px;
+          border-radius: 50%;
+          background: radial-gradient(circle at center, #ffffff 0%, #e2e8f0 100%);
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
         }
 
-        .upload-dropzone h4 {
-          font-size: 14.5px;
-          font-weight: 600;
-          color: var(--ink);
-          margin: 0;
+        .camera-shutter-btn:not(:disabled):hover {
+          transform: scale(1.05);
+          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
         }
 
-        .upload-dropzone p {
-          font-size: 12px;
-          color: var(--gray);
-          max-width: 280px;
-          line-height: 1.4;
-          margin: 0;
+        .camera-shutter-btn:not(:disabled):active {
+          transform: scale(0.95);
         }
 
-        .upload-footer-actions {
-          margin-top: 16px;
+        .camera-shutter-btn:not(:disabled):active .shutter-inner {
+          transform: scale(0.9);
+          background: radial-gradient(circle at center, #e2e8f0 0%, #cbd5e1 100%);
+        }
+
+        .camera-shutter-btn:disabled {
+          opacity: 0.5;
+          border-color: rgba(28, 14, 16, 0.15);
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+
+        .camera-shutter-btn:disabled .shutter-inner {
+          background: rgba(28, 14, 16, 0.1);
+          box-shadow: none;
+        }
+
+        /* Right controls group */
+        .right-controls-group {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          border-top: 1px solid var(--border);
-          padding-top: 14px;
+          gap: 16px;
         }
 
-        .file-desc-lbl {
-          font-size: 12.5px;
+        @media (max-width: 640px) {
+          .right-controls-group {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+
+        /* Stop Camera Button Details */
+        .stop-camera-btn {
+          background: linear-gradient(135deg, #ef4444, #b91c1c);
+          color: #fff;
+          box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+        }
+
+        .stop-camera-btn:not(:disabled):hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+          filter: brightness(1.1);
+        }
+
+        .stop-camera-btn:not(:disabled):active {
+          transform: translateY(0);
+        }
+
+        .stop-camera-btn:disabled {
+          background: var(--border);
           color: var(--gray-light);
-          font-style: italic;
+          box-shadow: none;
+          cursor: not-allowed;
+        }
+
+        /* Torch Button Details */
+        .torch-btn {
+          width: 46px;
+          height: 46px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.4);
+          border: 1.5px solid var(--border);
+          color: var(--ink);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.3s;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .torch-btn:not(:disabled):hover {
+          border-color: var(--gold);
+          color: var(--primary);
+          background-color: #fff;
+          box-shadow: 0 0 12px rgba(212, 175, 55, 0.35);
+          transform: scale(1.05);
+        }
+
+        .torch-btn:disabled {
+          background: rgba(28, 14, 16, 0.02);
+          border-color: var(--border);
+          color: var(--gray-light);
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+
+        .torch-btn.active {
+          background: rgba(196, 30, 58, 0.05);
+          border-color: var(--primary);
+          color: var(--primary);
+          box-shadow: 0 0 12px rgba(196, 30, 58, 0.2);
+        }
+
+        .torch-btn svg {
+          width: 18px;
+          height: 18px;
         }
 
         /* Process Auditing Flow */
